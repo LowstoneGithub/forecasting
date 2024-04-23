@@ -1,0 +1,59 @@
+---
+title: "forecasting"
+output: html_document
+date: "2024-03-13"
+---
+```{r}
+# Installieren Sie fpp3, falls noch nicht installiert
+if (!requireNamespace("fpp3", quietly = TRUE)) {
+  install.packages("fpp3")
+}
+
+# Laden Sie das fpp3-Paket
+library(fpp3)
+
+```
+
+```{r}
+yts_df <- read.csv("yts.csv")
+```
+
+```{r}
+# Konvertieren von kategorischen Variablen in Faktoren
+daten$Education_Level <- as.factor(daten$Education_Level)
+daten$Geschlecht <- as.factor(daten$Geschlecht)
+daten$US_State <- as.factor(daten$US_State)
+```
+
+```{r}
+# Lineares Modell aufstellen
+modell <- lm(Prävalenz ~ Education_Level + Zeit + Preis_von_Zigaretten + Ausgaben_für_Raucherkampagnen + Geschlecht + US_State, data = daten)
+
+# Zusammenfassung des Modells anzeigen
+summary(modell)
+```
+
+```{r}
+#Time series
+# Daten laden
+daten <- read.csv("pfad_zur_datendatei.csv")
+
+# Konvertieren Sie Ihre Daten in ein tsibble
+daten_tsibble <- daten %>%
+  as_tsibble(index = Datum)  # Stellen Sie sicher, dass 'Datum' das Datum Ihrer Zeitreihe enthält
+
+daten_tsibble %>%
+  autoplot(Prävalenz)
+
+```
+
+```{r}
+fit_arima <- daten_tsibble %>%
+  model(ARIMA(Prävalenz))
+report(fit_arima)
+
+```
+
+
+
+
