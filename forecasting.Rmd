@@ -4,14 +4,14 @@ output: html_document
 date: "2024-03-13"
 ---
 ```{r}
-# Installieren Sie fpp3, falls noch nicht installiert
-if (!requireNamespace("fpp3", quietly = TRUE)) {
-  install.packages("fpp3")
+#Install and load necessary packages
+packages <- c("fpp3","knitr")
+for (package in packages) {
+  if (!requireNamespace(package, quietly = TRUE)) {
+    install.packages(package)
+  }
 }
-
-# Laden Sie das fpp3-Paket
-library(fpp3)
-
+lapply(packages,library, character.only=T)
 ```
 
 ```{r}
@@ -34,24 +34,24 @@ summary(modell)
 ```
 
 ```{r}
+#Clean dataframe
+yts_df_new <- yts_df%>%
+  filter(DataSource == "YTS", TopicDesc == c("Cigarette Use (Youth)","Smokeless Tobacco Use (Youth)"))
+```
+
+```{r}
 #Time series
-# Daten laden
-daten <- read.csv("pfad_zur_datendatei.csv")
-
 # Konvertieren Sie Ihre Daten in ein tsibble
-daten_tsibble <- daten %>%
-  as_tsibble(index = Datum)  # Stellen Sie sicher, dass 'Datum' das Datum Ihrer Zeitreihe enthält
-
-daten_tsibble %>%
-  autoplot(Prävalenz)
+# Assuming yts_df_new is the dataframe you are working with
+# and you need to include additional variables to ensure uniqueness
+yts_tsibble <- as_tsibble(yts_df_new, index = YEAR, key = names(yts_df_new)[!names(yts_df_new) %in% "YEAR"])
 
 ```
 
 ```{r}
-fit_arima <- daten_tsibble %>%
-  model(ARIMA(Prävalenz))
-report(fit_arima)
-
+yts_tsibble%>%
+  summarise(meanPrev = mean(Data_Value, na.rm=T))%>%
+  autoplot(meanPrev)
 ```
 
 

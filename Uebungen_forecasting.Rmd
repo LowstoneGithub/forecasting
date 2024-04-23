@@ -1,0 +1,29 @@
+---
+title: "Uebungen_forecasting"
+output: html_document
+date: "2024-04-23"
+---
+
+```{r}
+#Install and load necessary packages
+packages <- c("fpp3","knitr")
+for (package in packages) {
+  if (!requireNamespace(package, quietly = TRUE)) {
+    install.packages(package)
+  }
+}
+lapply(packages,library, character.only=T)
+```
+
+```{r}
+global_economy
+
+```
+```{r}
+#Um globale Importe zu zeigen muss der Durchschnitt pro Jahr berechnet werden
+#X Achse in stibbles sollte automatisch zeigen ob der stibbles stimmt (Zeit als X Funktion und welche Auflösung)
+global_economy %>%
+  summarise(meanImports = mean(Imports, na.rm=T))%>%
+  autoplot(meanImports)
+```
+
