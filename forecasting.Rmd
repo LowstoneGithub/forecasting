@@ -19,21 +19,6 @@ yts_df <- read.csv("yts.csv")
 ```
 
 ```{r}
-# Konvertieren von kategorischen Variablen in Faktoren
-daten$Education_Level <- as.factor(daten$Education_Level)
-daten$Geschlecht <- as.factor(daten$Geschlecht)
-daten$US_State <- as.factor(daten$US_State)
-```
-
-```{r}
-# Lineares Modell aufstellen
-modell <- lm(Prävalenz ~ Education_Level + Zeit + Preis_von_Zigaretten + Ausgaben_für_Raucherkampagnen + Geschlecht + US_State, data = daten)
-
-# Zusammenfassung des Modells anzeigen
-summary(modell)
-```
-
-```{r}
 #Clean dataframe
 yts_df_new <- yts_df%>%
   filter(DataSource == "YTS", TopicDesc == c("Cigarette Use (Youth)","Smokeless Tobacco Use (Youth)"))
@@ -55,5 +40,58 @@ yts_tsibble%>%
 ```
 
 
+```{r}
+# Plot time series for each level of Education
+yts_tsibble %>%
+  group_by(Education) %>%
+  summarise(meanPrev = mean(Data_Value, na.rm = TRUE)) %>%
+  ggplot(aes(x = YEAR, y = meanPrev, group = Education, color = Education)) + 
+    geom_line() +
+    labs(title = "Time Series of Mean Prevalence by Education Level",
+         x = "Year",
+         y = "Mean Prevalence (%)") +
+    theme_minimal() +
+    scale_color_brewer(palette = "Set1")  # Using a color palette for clarity
+```
 
+```{r}
+# Plot time series for each level of Education
+yts_tsibble %>%
+  group_by(Gender) %>%
+  summarise(meanPrev = mean(Data_Value, na.rm = TRUE)) %>%
+  ggplot(aes(x = YEAR, y = meanPrev, group = Gender, color = Gender)) + 
+    geom_line() +
+    labs(title = "Time Series of Mean Prevalence by Gender",
+         x = "Year",
+         y = "Mean Prevalence (%)") +
+    theme_minimal() +
+    scale_color_brewer(palette = "Set1")  # Using a color palette for clarity
+```
+
+```{r}
+# Plot time series for each level of Education
+yts_tsibble %>%
+  group_by(Response) %>%
+  summarise(meanPrev = mean(Data_Value, na.rm = TRUE)) %>%
+  ggplot(aes(x = YEAR, y = meanPrev, group = Response, color = Response)) + 
+    geom_line() +
+    labs(title = "Time Series of Mean Prevalence by Response",
+         x = "Year",
+         y = "Mean Prevalence (%)") +
+    theme_minimal() +
+    scale_color_brewer(palette = "Set1")  # Using a color palette for clarity
+```
+```{r}
+# Plot time series for each level of Education
+yts_tsibble %>%
+  group_by(TopicDesc) %>%
+  summarise(meanPrev = mean(Data_Value, na.rm = TRUE)) %>%
+  ggplot(aes(x = YEAR, y = meanPrev, group = TopicDesc, color = TopicDesc)) + 
+    geom_line() +
+    labs(title = "Time Series of Mean Prevalence by Topic",
+         x = "Year",
+         y = "Mean Prevalence (%)") +
+    theme_minimal() +
+    scale_color_brewer(palette = "Set1")  # Using a color palette for clarity
+```
 
