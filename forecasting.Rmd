@@ -94,4 +94,8 @@ yts_tsibble %>%
     theme_minimal() +
     scale_color_brewer(palette = "Set1")  # Using a color palette for clarity
 ```
+```{r}
+#Autokorrelationen berechnen
+#Autokorrelationen für "Subsets" gegeneinander korrelieren
+```
 
