@@ -5,7 +5,7 @@ date: "2024-03-13"
 ---
 ```{r}
 #Install and load necessary packages
-packages <- c("fpp3","knitr")
+packages <- c("fpp3","knitr","forecast")
 for (package in packages) {
   if (!requireNamespace(package, quietly = TRUE)) {
     install.packages(package)
@@ -16,33 +16,149 @@ lapply(packages,library, character.only=T)
 
 ```{r}
 yts_df <- read.csv("yts.csv")
+cost_cig <- read.csv("tax_cig.csv")
 ```
 
 ```{r}
 #Clean dataframe
 yts_df_new <- yts_df%>%
-  filter(DataSource == "YTS", TopicDesc == c("Cigarette Use (Youth)","Smokeless Tobacco Use (Youth)"))
+  filter(DataSource == "YTS", TopicDesc == c("Cigarette Use (Youth)"))%>%
+  select(YEAR, LocationDesc, Response, Data_Value, c(Data_Value_Std_Err:High_Confidence_Limit), Gender, Education)
+
+cost_df_new <- cost_cig%>%
+  filter(SubMeasureDesc == c("Average Cost per pack","Federal and State tax as a Percentage of Retail Price","Federal and State Tax per pack")& Data_Value_Unit == c("$","%"))%>%
+  select(LocationDesc,Year,SubMeasureDesc,Data_Value,Data_Value_Unit)
 ```
 
 ```{r}
-#Time series
-# Konvertieren Sie Ihre Daten in ein tsibble
-# Assuming yts_df_new is the dataframe you are working with
-# and you need to include additional variables to ensure uniqueness
-yts_tsibble <- as_tsibble(yts_df_new, index = YEAR, key = names(yts_df_new)[!names(yts_df_new) %in% "YEAR"])
+#tsibble erstellen
+smoke <- as_tsibble(yts_df_new, key = c(LocationDesc, Response, Gender, Education), index = YEAR)
+smoke
 
+cost <- as_tsibble(cost_df_new, key = c(LocationDesc, SubMeasureDesc), index = Year)
+cost
 ```
 
 ```{r}
-yts_tsibble%>%
+#Convert character to factors
+smoke <- smoke %>%
+  mutate(
+    LocationDesc = as.factor(LocationDesc),
+    Response = as.factor(Response),
+    Gender = as.factor(Gender),
+    Education = as.factor(Education)
+  )
+
+cost <- cost%>%
+  mutate(LocationDesc = as.factor(LocationDesc),
+         SubMeasureDesc = as.factor(SubMeasureDesc))
+```
+
+```{r}
+trend_use_plot <- smoke%>%
+  group_by(Response)%>%
   summarise(meanPrev = mean(Data_Value, na.rm=T))%>%
-  autoplot(meanPrev)
+  autoplot(meanPrev)+
+  labs(title = "Trends in Cigarette Use by Frequency",
+       x = "Time (Year)",
+       y= "Mean Prevalence in %")+
+  theme_minimal()
+trend_use_plot
+```
+```{r}
+trend_use_state_plot <- smoke%>%
+  group_by(LocationDesc,Response)%>%
+  summarise(meanPrev = mean(Data_Value, na.rm=T))%>%
+  ungroup()%>%
+  autoplot(meanPrev)+
+  labs(title = "Trends in Current Cigarette Use by US State & Response",
+       x = "Time (Year)",
+       y= "Mean Prevalence in %")+
+  theme_minimal()+
+  theme(legend.position = "none")+
+  facet_wrap(~Response)
+
+trend_use_state_plot
+```
+```{r}
+trend_cost_plot <- cost%>%
+  filter(SubMeasureDesc == "Average Cost per pack")%>%
+  summarise(meanCost = mean(Data_Value, na.rm=T))%>%
+  autoplot(meanCost)+
+  labs(title = "Trends in Average Cost of Cigarette Pack",
+       x = "Time (Year)",
+       y= "Mean Cost in $")+
+  theme_minimal()
+trend_cost_plot
+
+trend_taxper_plot <- cost%>%
+  filter(SubMeasureDesc == "Federal and State tax as a Percentage of Retail Price")%>%
+  summarise(meanTax = mean(Data_Value, na.rm=T))%>%
+  autoplot(meanTax)+
+  labs(title = "Trends in Tax as % of Retail Price",
+       x = "Time (Year)",
+       y= "Mean Tax in %")+
+  theme_minimal()
+trend_taxper_plot
+
+trend_tax_plot <- cost%>%
+  filter(SubMeasureDesc == "Federal and State Tax per pack")%>%
+  summarise(meanTax = mean(Data_Value, na.rm=T))%>%
+  autoplot(meanTax)+
+  labs(title = "Trends in Tax per Pack",
+       x = "Time (Year)",
+       y= "Mean Tax in %")+
+  theme_minimal()
+trend_tax_plot
+```
+```{r}
+trend_cost_state_plot <- cost%>%
+  filter(SubMeasureDesc == "Average Cost per pack")%>%
+  group_by(LocationDesc)%>%
+  summarise(meanCost = mean(Data_Value, na.rm=T))%>%
+  ungroup()%>%
+  autoplot(meanCost)+
+  labs(title = "Trends in Costs of Cigarette Packs by US State",
+       x = "Time (Year)",
+       y= "Mean Cost in $")+
+  theme_minimal()+
+  theme(legend.position = "none")
+
+trend_cost_state_plot
+
+trend_taxper_state_plot <- cost%>%
+  filter(SubMeasureDesc == "Federal and State tax as a Percentage of Retail Price")%>%
+  group_by(LocationDesc)%>%
+  summarise(meanCost = mean(Data_Value, na.rm=T))%>%
+  ungroup()%>%
+  autoplot(meanCost)+
+  labs(title = "Trends in Tax as % of Retail Price of Cigarette by US State",
+       x = "Time (Year)",
+       y= "Mean Tax in %")+
+  theme_minimal()+
+  theme(legend.position = "none")
+
+trend_taxper_state_plot
+
+trend_tax_state_plot <- cost%>%
+  filter(SubMeasureDesc == "Federal and State Tax per pack")%>%
+  group_by(LocationDesc)%>%
+  summarise(meanCost = mean(Data_Value, na.rm=T))%>%
+  ungroup()%>%
+  autoplot(meanCost)+
+  labs(title = "Trends in Cigarette Tax by US State",
+       x = "Time (Year)",
+       y= "Mean Tax in %")+
+  theme_minimal()+
+  theme(legend.position = "none")
+
+trend_tax_state_plot
 ```
 
 
 ```{r}
 # Plot time series for each level of Education
-yts_tsibble %>%
+smoke %>%
   group_by(Education) %>%
   summarise(meanPrev = mean(Data_Value, na.rm = TRUE)) %>%
   ggplot(aes(x = YEAR, y = meanPrev, group = Education, color = Education)) + 
@@ -56,7 +172,7 @@ yts_tsibble %>%
 
 ```{r}
 # Plot time series for each level of Education
-yts_tsibble %>%
+smoke %>%
   group_by(Gender) %>%
   summarise(meanPrev = mean(Data_Value, na.rm = TRUE)) %>%
   ggplot(aes(x = YEAR, y = meanPrev, group = Gender, color = Gender)) + 
@@ -67,33 +183,134 @@ yts_tsibble %>%
     theme_minimal() +
     scale_color_brewer(palette = "Set1")  # Using a color palette for clarity
 ```
+```{r}
+# Filter by Response == "Current"
+filtered_smoke <- smoke %>%
+  filter(Response == "Current")
+
+# Aggregate using index_by for YEAR, and group by LocationDesc
+aggregated_smoke <- filtered_smoke %>%
+  index_by(YEAR) %>%  # Use index_by for YEAR
+  group_by(LocationDesc) %>%
+  summarise(
+    Mean_Data_Value = mean(Data_Value, na.rm = TRUE),  # Calculating the mean, but adjust as necessary
+    .groups = 'drop'  # Dropping groups after summarisation
+  )
+
+# The resulting tsibble automatically has YEAR as its index since index_by was used
+# Ensure that the tsibble structure is as expected
+agg_smoke <- as_tsibble(aggregated_smoke, key = "LocationDesc")
+
+# Print structure of the new tsibble
+print(agg_smoke)
+```
+```{r}
+# Convert tsibble to tibble
+cost_df <- as_tibble(cost)%>%
+  select(!Data_Value_Unit)
+
+# Transforming the data to a wide format
+wide_cost_df <- cost_df %>%
+  pivot_wider(
+    names_from = SubMeasureDesc,    # Create new columns from the factor levels of SubMeasureDesc
+    values_from = Data_Value,       # Fill the new columns with values from Data_Value
+    values_fill = list(Data_Value = NA)  # Fill missing observations with NA
+  )
+
+# Convert back to tsibble
+# Assuming 'Year' and 'LocationDesc' make up the appropriate index and key
+wide_cost_tsibble <- as_tsibble(wide_cost_df, index = Year, key = "LocationDesc")
+
+# Print the structure of the new wide tsibble
+print(wide_cost_tsibble)
+```
+```{r}
+# Convert aggregated_smoke to a tibble if it's not already
+aggregated_smoke_df <- as_tibble(aggregated_smoke)
+
+# Rename columns in aggregated_smoke_df
+aggregated_smoke_df <- aggregated_smoke_df %>%
+  rename(year = YEAR, state = LocationDesc)
+
+# Rename columns in wide_cost_df
+wide_cost_df <- wide_cost_df %>%
+  rename(year = Year, state = LocationDesc)
+
+# Merge the two dataframes by 'year' and 'state'
+merged_df <- left_join(aggregated_smoke_df, wide_cost_df, by = c("year", "state"))
+
+# Check the structure of the merged dataframe
+print(str(merged_df))
+
+#Create tsibble
+merged_tsibble <- as_tsibble(merged_df, key=c("state"),index=year)
+merged_tsibble
+```
+```{r}
+# Aggregate the merged dataframe by year to get the mean of the specified variables
+aggregated_yearly_df <- merged_df %>%
+  group_by(year) %>%
+  summarise(
+    Mean_Data_Value = mean(Mean_Data_Value, na.rm = TRUE),
+    Average_Cost_per_pack = mean(`Average Cost per pack`, na.rm = TRUE),
+    Federal_and_State_Tax_per_pack = mean(`Federal and State Tax per pack`, na.rm = TRUE),
+    Federal_and_State_tax_as_a_Percentage_of_Retail_Price = mean(`Federal and State tax as a Percentage of Retail Price`, na.rm = TRUE)
+  )
+
+# Check the structure of the new aggregated dataframe
+print(str(aggregated_yearly_df))
+
+yearly_ts <- as_tsibble(aggregated_yearly_df, index=year)
+```
 
 ```{r}
-# Plot time series for each level of Education
-yts_tsibble %>%
-  group_by(Response) %>%
-  summarise(meanPrev = mean(Data_Value, na.rm = TRUE)) %>%
-  ggplot(aes(x = YEAR, y = meanPrev, group = Response, color = Response)) + 
-    geom_line() +
-    labs(title = "Time Series of Mean Prevalence by Response",
-         x = "Year",
-         y = "Mean Prevalence (%)") +
-    theme_minimal() +
-    scale_color_brewer(palette = "Set1")  # Using a color palette for clarity
+merged_tsibble %>%
+  ggplot(aes(x = `Average Cost per pack`, y = Mean_Data_Value)) +
+  geom_line() +
+  geom_point(pch=20, color = "purple") +
+  labs(x = "Average Cost per pack",
+       y = "1 Month Prevalence") +
+  theme_bw()
+
+merged_tsibble %>%
+  ggplot(aes(x = `Federal and State Tax per pack`, y = Mean_Data_Value)) +
+  geom_line() +
+  geom_point(pch=20, color = "purple")+
+  labs(x = "Average Cost per pack",
+       y = "1 Month Prevalence") +
+  theme_bw()
+
+merged_tsibble %>%
+  ggplot(aes(x = `Federal and State tax as a Percentage of Retail Price`, y = Mean_Data_Value)) +
+  geom_line() +
+  geom_point(pch=20, color = "purple")+
+  labs(x = "Average Cost per pack",
+       y = "1 Month Prevalence") +
+  theme_bw()
+
+yearly_ts%>%
+  ggplot(aes(x = Average_Cost_per_pack, y = Mean_Data_Value)) +
+  geom_line() +
+  geom_point(pch=20, color = "purple") +
+  labs(x = "Average Cost per pack",
+       y = "1 Month Prevalence") +
+  theme_bw()
 ```
+
+
 ```{r}
-# Plot time series for each level of Education
-yts_tsibble %>%
-  group_by(TopicDesc) %>%
-  summarise(meanPrev = mean(Data_Value, na.rm = TRUE)) %>%
-  ggplot(aes(x = YEAR, y = meanPrev, group = TopicDesc, color = TopicDesc)) + 
-    geom_line() +
-    labs(title = "Time Series of Mean Prevalence by Topic",
-         x = "Year",
-         y = "Mean Prevalence (%)") +
-    theme_minimal() +
-    scale_color_brewer(palette = "Set1")  # Using a color palette for clarity
+yearly_ts%>%
+  gg_lag(Mean_Data_Value)
+
+yearly_ts%>%
+  ACF(Mean_Data_Value)
+
+yearly_ts%>%
+  ACF(Mean_Data_Value)%>%
+  autoplot()
 ```
+
+
 ```{r}
 #Autokorrelationen berechnen
 #Autokorrelationen für "Subsets" gegeneinander korrelieren
