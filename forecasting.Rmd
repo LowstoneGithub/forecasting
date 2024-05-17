@@ -5,7 +5,7 @@ date: "2024-03-13"
 ---
 ```{r}
 #Install and load necessary packages
-packages <- c("fpp3","knitr","forecast")
+packages <- c("fpp3","knitr","forecast","seasonal","fable","imputeTS","feasts")
 for (package in packages) {
   if (!requireNamespace(package, quietly = TRUE)) {
     install.packages(package)
@@ -59,6 +59,7 @@ trend_use_plot <- smoke%>%
   group_by(Response)%>%
   summarise(meanPrev = mean(Data_Value, na.rm=T))%>%
   autoplot(meanPrev)+
+    geom_point(size=0.9, pch = 18, color='brown') +
   labs(title = "Trends in Cigarette Use by Frequency",
        x = "Time (Year)",
        y= "Mean Prevalence in %")+
@@ -71,6 +72,7 @@ trend_use_state_plot <- smoke%>%
   summarise(meanPrev = mean(Data_Value, na.rm=T))%>%
   ungroup()%>%
   autoplot(meanPrev)+
+    geom_point(size=0.9, pch = 18, color='brown') +
   labs(title = "Trends in Current Cigarette Use by US State & Response",
        x = "Time (Year)",
        y= "Mean Prevalence in %")+
@@ -85,6 +87,7 @@ trend_cost_plot <- cost%>%
   filter(SubMeasureDesc == "Average Cost per pack")%>%
   summarise(meanCost = mean(Data_Value, na.rm=T))%>%
   autoplot(meanCost)+
+    geom_point(size=0.9, pch = 18, color='brown') +
   labs(title = "Trends in Average Cost of Cigarette Pack",
        x = "Time (Year)",
        y= "Mean Cost in $")+
@@ -95,6 +98,7 @@ trend_taxper_plot <- cost%>%
   filter(SubMeasureDesc == "Federal and State tax as a Percentage of Retail Price")%>%
   summarise(meanTax = mean(Data_Value, na.rm=T))%>%
   autoplot(meanTax)+
+    geom_point(size=0.9, pch = 18, color='brown') +
   labs(title = "Trends in Tax as % of Retail Price",
        x = "Time (Year)",
        y= "Mean Tax in %")+
@@ -105,6 +109,7 @@ trend_tax_plot <- cost%>%
   filter(SubMeasureDesc == "Federal and State Tax per pack")%>%
   summarise(meanTax = mean(Data_Value, na.rm=T))%>%
   autoplot(meanTax)+
+    geom_point(size=0.9, pch = 18, color='brown') +
   labs(title = "Trends in Tax per Pack",
        x = "Time (Year)",
        y= "Mean Tax in %")+
@@ -118,6 +123,7 @@ trend_cost_state_plot <- cost%>%
   summarise(meanCost = mean(Data_Value, na.rm=T))%>%
   ungroup()%>%
   autoplot(meanCost)+
+    geom_point(size=0.9, pch = 18, color='brown') +
   labs(title = "Trends in Costs of Cigarette Packs by US State",
        x = "Time (Year)",
        y= "Mean Cost in $")+
@@ -132,6 +138,7 @@ trend_taxper_state_plot <- cost%>%
   summarise(meanCost = mean(Data_Value, na.rm=T))%>%
   ungroup()%>%
   autoplot(meanCost)+
+    geom_point(size=0.9, pch = 18, color='brown') +
   labs(title = "Trends in Tax as % of Retail Price of Cigarette by US State",
        x = "Time (Year)",
        y= "Mean Tax in %")+
@@ -146,6 +153,7 @@ trend_tax_state_plot <- cost%>%
   summarise(meanCost = mean(Data_Value, na.rm=T))%>%
   ungroup()%>%
   autoplot(meanCost)+
+    geom_point(size=0.9, pch = 18, color='brown') +
   labs(title = "Trends in Cigarette Tax by US State",
        x = "Time (Year)",
        y= "Mean Tax in %")+
@@ -159,27 +167,31 @@ trend_tax_state_plot
 ```{r}
 # Plot time series for each level of Education
 smoke %>%
+  filter(Response == "Current")%>%
   group_by(Education) %>%
   summarise(meanPrev = mean(Data_Value, na.rm = TRUE)) %>%
   ggplot(aes(x = YEAR, y = meanPrev, group = Education, color = Education)) + 
     geom_line() +
-    labs(title = "Time Series of Mean Prevalence by Education Level",
+    geom_point(size=0.9, pch = 18, color='brown') +
+    labs(title = "Time Series of 1 Month Prevalence by Education Level",
          x = "Year",
-         y = "Mean Prevalence (%)") +
+         y = "1 Month Prevalence (%)") +
     theme_minimal() +
     scale_color_brewer(palette = "Set1")  # Using a color palette for clarity
 ```
 
 ```{r}
-# Plot time series for each level of Education
+# Plot time series for Gender
 smoke %>%
+  filter(Response == "Current")%>%
   group_by(Gender) %>%
   summarise(meanPrev = mean(Data_Value, na.rm = TRUE)) %>%
   ggplot(aes(x = YEAR, y = meanPrev, group = Gender, color = Gender)) + 
     geom_line() +
-    labs(title = "Time Series of Mean Prevalence by Gender",
+  geom_point(size=0.9, pch = 18, color='brown') +
+    labs(title = "Time Series of 1 Month Prevalence by Gender",
          x = "Year",
-         y = "Mean Prevalence (%)") +
+         y = "1 Month Prevalence (%)") +
     theme_minimal() +
     scale_color_brewer(palette = "Set1")  # Using a color palette for clarity
 ```
@@ -197,7 +209,6 @@ aggregated_smoke <- filtered_smoke %>%
     .groups = 'drop'  # Dropping groups after summarisation
   )
 
-# The resulting tsibble automatically has YEAR as its index since index_by was used
 # Ensure that the tsibble structure is as expected
 agg_smoke <- as_tsibble(aggregated_smoke, key = "LocationDesc")
 
@@ -205,7 +216,7 @@ agg_smoke <- as_tsibble(aggregated_smoke, key = "LocationDesc")
 print(agg_smoke)
 ```
 ```{r}
-# Convert tsibble to tibble
+# Convert cost tsibble to tibble
 cost_df <- as_tibble(cost)%>%
   select(!Data_Value_Unit)
 
@@ -247,6 +258,26 @@ merged_tsibble <- as_tsibble(merged_df, key=c("state"),index=year)
 merged_tsibble
 ```
 ```{r}
+# Filter out rows with NA values in the variables of interest
+filtered_tsibble <- merged_tsibble %>%
+  filter(!is.na(`Federal and State tax as a Percentage of Retail Price`), !is.na(Mean_Data_Value))
+
+# Calculate the correlation
+cor_value <- cor(filtered_tsibble$`Federal and State tax as a Percentage of Retail Price`, filtered_tsibble$Mean_Data_Value)
+
+# Create the plot and add the correlation value as a text label
+filtered_tsibble %>%
+  ggplot(aes(x = `Federal and State tax as a Percentage of Retail Price`, y = Mean_Data_Value)) +
+  geom_line() +
+  geom_point(size = 0.9, pch = 18, color = 'brown') +
+  labs(x = "Federal and State tax as a Percentage of Retail Price",
+       y = "Mean Data Value",
+       title = paste("Correlation:", round(cor_value, 2))) +
+  theme_bw()
+
+```
+
+```{r}
 # Aggregate the merged dataframe by year to get the mean of the specified variables
 aggregated_yearly_df <- merged_df %>%
   group_by(year) %>%
@@ -261,13 +292,15 @@ aggregated_yearly_df <- merged_df %>%
 print(str(aggregated_yearly_df))
 
 yearly_ts <- as_tsibble(aggregated_yearly_df, index=year)
+
+print(yearly_ts)
 ```
 
-```{r}
+```{r, echo=F, eval=F}
 merged_tsibble %>%
   ggplot(aes(x = `Average Cost per pack`, y = Mean_Data_Value)) +
   geom_line() +
-  geom_point(pch=20, color = "purple") +
+    geom_point(size=0.9, pch = 18, color='brown') +
   labs(x = "Average Cost per pack",
        y = "1 Month Prevalence") +
   theme_bw()
@@ -275,7 +308,7 @@ merged_tsibble %>%
 merged_tsibble %>%
   ggplot(aes(x = `Federal and State Tax per pack`, y = Mean_Data_Value)) +
   geom_line() +
-  geom_point(pch=20, color = "purple")+
+    geom_point(size=0.9, pch = 18, color='brown') +
   labs(x = "Average Cost per pack",
        y = "1 Month Prevalence") +
   theme_bw()
@@ -283,7 +316,7 @@ merged_tsibble %>%
 merged_tsibble %>%
   ggplot(aes(x = `Federal and State tax as a Percentage of Retail Price`, y = Mean_Data_Value)) +
   geom_line() +
-  geom_point(pch=20, color = "purple")+
+  geom_point(size=0.9, pch = 18, color='brown') +
   labs(x = "Average Cost per pack",
        y = "1 Month Prevalence") +
   theme_bw()
@@ -291,7 +324,7 @@ merged_tsibble %>%
 yearly_ts%>%
   ggplot(aes(x = Average_Cost_per_pack, y = Mean_Data_Value)) +
   geom_line() +
-  geom_point(pch=20, color = "purple") +
+  geom_point(size=0.9, pch = 18, color='brown') +
   labs(x = "Average Cost per pack",
        y = "1 Month Prevalence") +
   theme_bw()
@@ -301,6 +334,7 @@ yearly_ts%>%
 ```{r}
 yearly_ts%>%
   gg_lag(Mean_Data_Value)
+#moderate short-term autocorrelation
 
 yearly_ts%>%
   ACF(Mean_Data_Value)
@@ -308,11 +342,394 @@ yearly_ts%>%
 yearly_ts%>%
   ACF(Mean_Data_Value)%>%
   autoplot()
+#you can see trend but no seasonality
 ```
 
 
 ```{r}
-#Autokorrelationen berechnen
-#Autokorrelationen für "Subsets" gegeneinander korrelieren
+#decomposition
+#no calendar transformation needed
+#no population transformation needed
+#if we use percentage of retail price, we get an informative value that is not affected by inflation
+#no mathematical transformation needed, as it's prevalence & % of retail price
+#additive decomposition, but we probably only have trend
+dcmp <- yearly_ts%>%
+  model(stl = STL(Mean_Data_Value))
+components(dcmp)
+
+components(dcmp)%>%
+  autoplot(colour="blue")+
+  theme_bw()
+
+components(dcmp) %>%
+  as_tsibble() %>%
+  autoplot(Mean_Data_Value, colour = "gray") +
+  geom_line(aes(y=season_adjust), colour = "#0072B2") +
+  labs(y = "1 Month Prevalence",
+       title = "Total 1-Month Prevalence of Smoking in US with seasonal adjustment")
+
+components(dcmp) %>%
+  as_tsibble() %>%
+  autoplot(Mean_Data_Value, colour="gray") +
+  geom_line(aes(y=trend), colour = "#D55E00") +
+  labs(
+    y = "1 Month Prevalence",
+    title = "Total 1-Month Prevalence of Smoking in US"
+  )
+
+# Impute missing values using linear interpolation
+yearly_ts <- yearly_ts %>%
+  mutate(Federal_and_State_tax_as_a_Percentage_of_Retail_Price = na.interp(Federal_and_State_tax_as_a_Percentage_of_Retail_Price))
+
+# Decompose the time series using STL
+dcmp_c <- yearly_ts %>%
+  model(stl = STL(Federal_and_State_tax_as_a_Percentage_of_Retail_Price))
+
+# Extract and plot the decomposition components
+components <- components(dcmp_c)
+autoplot(components)
+```
+```{r}
+#Moving averages
+mean_prev <- yearly_ts %>%
+  mutate(
+    `5-MA` = slider::slide_dbl(Mean_Data_Value, mean,
+                .before = 2, .after = 2, .complete = TRUE)
+  )
+
+mean_prev %>%
+  autoplot(Mean_Data_Value) +
+  geom_line(aes(y = `5-MA`), colour = "#D55E00") +
+  labs(y = "1 Month Prevalence",
+       title = "Total 1-Month Prevalence of Smoking in US") +
+  guides(colour = guide_legend(title = "series"))
+
+mean_tax <- yearly_ts %>%
+  mutate(
+    `5-MA` = slider::slide_dbl(Federal_and_State_tax_as_a_Percentage_of_Retail_Price, mean,
+                .before = 2, .after = 2, .complete = TRUE)
+  )
+
+mean_tax %>%
+  autoplot(Federal_and_State_tax_as_a_Percentage_of_Retail_Price) +
+  geom_line(aes(y = `5-MA`), colour = "#D55E00") +
+  labs(y = "Tax as % of Retail Price",
+       title = "Total Tobacco Tax as % of Retail Price in US") +
+  guides(colour = guide_legend(title = "series"))
+```
+```{r}
+merged_tsibble%>%
+  features(Mean_Data_Value, feat_stl)
+
+# Plot trend strength by state
+merged_tsibble %>%
+  features(Mean_Data_Value, feat_stl) %>%
+  filter(!is.na(trend_strength)) %>%
+  ggplot(aes(x = reorder(state, trend_strength), y = trend_strength)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  coord_flip() + # Flip coordinates for better readability
+  labs(title = "Trend Strength by State",
+       x = "State",
+       y = "Trend Strength") +
+  theme_minimal()
+
+# Calculate the mean Mean_Data_Value for each state
+state_mean_data <- merged_tsibble %>%
+  group_by(state) %>%
+  summarise(mean_value = mean(Mean_Data_Value, na.rm = TRUE)) %>%
+  arrange(desc(mean_value))
+
+# Print the result to check
+print(state_mean_data)
+
+# Plot the mean Mean_Data_Value for each state
+ggplot(state_mean_data, aes(x = reorder(state, mean_value), y = mean_value)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  coord_flip() + # Flip coordinates for better readability
+  scale_y_continuous(limits = c(0, max(state_mean_data$mean_value))) + # Set appropriate y-axis limits
+  labs(title = "Mean Data Value by State",
+       x = "State",
+       y = "Mean Data Value") +
+  theme_minimal()
+
+# Ensure necessary packages are installed and loaded
+if (!requireNamespace("scales", quietly = TRUE)) {
+  install.packages("scales")
+}
+library(scales)
+
+# Normalize the feature values
+feature_data <- merged_tsibble %>%
+  features(Mean_Data_Value, feat_stl) %>%
+  pivot_longer(cols = trend_strength:stl_e_acf10, names_to = "feature", values_to = "value") %>%
+  filter(!is.na(value)) %>%
+  group_by(feature) %>%
+  mutate(normalized_value = scales::rescale(value))
+
+# Plot heatmap with normalized values
+ggplot(feature_data, aes(x = state, y = feature, fill = normalized_value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "blue") +
+  labs(title = "Heatmap of STL Decomposition Features by State (Normalized)",
+       x = "State",
+       y = "Feature") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+```
+
+```{r}
+# Fit the mean model
+mean_fit <- yearly_ts %>%
+  model(mean_model = MEAN(Mean_Data_Value))
+
+# Fit the naive model
+naive_fit <- yearly_ts %>%
+  model(naive_model = NAIVE(Mean_Data_Value))
+
+# Fit the drift model
+drift_fit <- yearly_ts %>%
+  model(drift_model = RW(Mean_Data_Value ~ drift()))
+
+# Generate forecasts for the mean model
+mean_forecast <- mean_fit %>%
+  forecast(h = "3 years")
+
+# Generate forecasts for the naive model
+naive_forecast <- naive_fit %>%
+  forecast(h = "3 years")
+
+# Generate forecasts for the drift model
+drift_forecast <- drift_fit %>%
+  forecast(h = "3 years")
+
+# Plot the forecasts for the mean model
+autoplot(mean_forecast, yearly_ts) +
+  labs(title = "Forecast of Mean Data Value using MEAN Model",
+       y = "Mean Data Value",
+       x = "Year") +
+  theme_minimal()
+
+# Plot the forecasts for the naive model
+autoplot(naive_forecast, yearly_ts) +
+  labs(title = "Forecast of Mean Data Value using NAIVE Model",
+       y = "Mean Data Value",
+       x = "Year") +
+  theme_minimal()
+
+# Plot the forecasts for the drift model
+autoplot(drift_forecast, yearly_ts) +
+  labs(title = "Forecast of Mean Data Value using DRIFT Model",
+       y = "Mean Data Value",
+       x = "Year") +
+  theme_minimal()
+```
+```{r}
+# Define the training period
+train <- yearly_ts %>%
+  filter_index(~ 2013)
+
+# Define the testing period
+test <- yearly_ts %>%
+  filter_index(2013 ~ 2017)
+
+# Fit the models on the training data
+model_fit <- train %>%
+  model(
+    Mean = MEAN(Mean_Data_Value),
+    Naive = NAIVE(Mean_Data_Value),
+    Drift = RW(Mean_Data_Value ~ drift()),
+    Trend = TSLM(Mean_Data_Value ~ trend()),
+    ARIMA = ARIMA(Mean_Data_Value),
+    ETS = ETS(Mean_Data_Value),
+  )
+
+# Generate forecasts for the testing period
+forecasts <- model_fit %>%
+  forecast(h = nrow(test))
+# Plot the forecasts against the actual values
+forecasts %>%
+  autoplot(train, level = NULL) +
+  autolayer(test, colour = "black") +
+  labs(
+    y = "1-Month Prevalence",
+    title = "Forecasts for 1-Month Prevalence using Different Models",
+    x = "Year"
+  ) +
+  guides(colour = guide_legend(title = "Forecast")) +
+  theme_minimal()
+
+# Assess the accuracy of the models
+accuracy(forecasts, yearly_ts)
+```
+
+```{r}
+# Fit the dynamic regression model on the training data
+dynamic_regression_fit <- train %>%
+  model(Dynamic_Regression = TSLM(Mean_Data_Value ~ trend() + Federal_and_State_tax_as_a_Percentage_of_Retail_Price))
+
+# Generate forecasts for the testing period
+dynamic_regression_forecast <- dynamic_regression_fit %>%
+  forecast(new_data = test)
+
+# Plot the forecasts against the actual values
+dynamic_regression_forecast %>%
+  autoplot(train, level = NULL) +
+  autolayer(test, colour = "black") +
+  labs(
+    y = "Mean Data Value",
+    title = "Forecast of Mean Data Value using Dynamic Regression Model",
+    x = "Year"
+  ) +
+  guides(colour = guide_legend(title = "Forecast")) +
+  theme_minimal()
+
+# Assess the accuracy of the dynamic regression model
+accuracy(dynamic_regression_forecast, yearly_ts)
+```
+
+
+
+```{r}
+# Filter data to include only states with at least 8 observations
+smoke_8 <- agg_smoke %>%
+  group_by(LocationDesc) %>%
+  filter(n() >= 8)
+
+# Make sure the tsibble is properly indexed and keyed
+smoke_8 <- smoke_8 %>%
+  as_tsibble(key = LocationDesc, index = YEAR)
+
+# Fill gaps in the time series data to make implicit gaps explicit
+smoke_8_filled <- smoke_8 %>%
+  fill_gaps()
+
+# Check for gaps after fill_gaps
+print(smoke_8_filled)
+
+# Interpolate the explicit gaps created by fill_gaps
+smoke_8_filled <- smoke_8_filled %>%
+  group_by(LocationDesc) %>%
+  mutate(Mean_Data_Value = na_interpolation(Mean_Data_Value, option = "linear")) %>%
+  ungroup()
+
+# Check the interpolated data
+print(smoke_8_filled)
+```
+
+```{r}
+#Benchmark Forecasts
+smoke_8 <- agg_smoke %>%
+  group_by(LocationDesc) %>%
+  filter(n() >= 8) # Identify locations with less than 8 observations
+
+# Fill gaps in the time series data using interpolation
+smoke_8_filled <- smoke_8 %>%
+  group_by(LocationDesc) %>%
+  mutate(Mean_Data_Value = na_interpolation(Mean_Data_Value, option = "linear")) %>%
+  ungroup()
+
+# Fit the mean model for each state
+mean_fit <- smoke_8 %>%
+  model(mean_model = MEAN(Mean_Data_Value))
+
+# Print the model fit
+print(mean_fit)
+
+# Forecast for each state
+mean_forecast <- mean_fit %>%
+  forecast(h = "3 years")
+
+# Plot the forecast for each state
+autoplot(mean_forecast, smoke_8) +
+  labs(title = "Forecast of Mean Data Value by State",
+       y = "Mean Data Value",
+       x = "Year") +
+  theme_minimal() +
+  facet_wrap(~ LocationDesc, scales = "free_y") # Separate plot for each state
+```
+
+```{r}
+# Fit the NAIVE model for each state
+naive_fit <- smoke_8_filled %>%
+  model(naive_model = NAIVE(Mean_Data_Value))
+
+# Generate forecasts for each state
+naive_forecast <- naive_fit %>%
+  forecast(h = "3 years")
+
+# Filter out rows with NA in forecast data
+naive_forecast_filtered <- naive_forecast %>%
+  filter(!is.na(.mean))
+
+# Plot the forecast for each state
+autoplot(naive_forecast_filtered, smoke_8_filled) +
+  labs(title = "Forecast of Mean Data Value by State using NAIVE Model",
+       y = "Mean Data Value",
+       x = "Year") +
+  theme_minimal() +
+  facet_wrap(~ LocationDesc, scales = "free_y") # Separate plot for each state
+```
+
+```{r}
+# Fit the drift model for each state
+drift_fit <- smoke_8_clean %>%
+  model(drift_model = RW(Mean_Data_Value ~ drift()))
+
+# Print the model fit to inspect any potential issues
+print(drift_fit)
+
+# Generate forecasts for each state
+drift_forecast <- drift_fit %>%
+  forecast(h = "3 years")
+
+# Inspect the forecast data
+print(drift_forecast)
+
+# Filter out rows with NA in forecast data
+drift_forecast_filtered <- drift_forecast %>%
+  filter(!is.na(.mean))
+
+# Check the number of rows in filtered forecast
+print(nrow(drift_forecast_filtered))
+
+# Plot the forecast for each state
+autoplot(drift_forecast_filtered, smoke_8_clean) +
+  labs(title = "Forecast of Mean Data Value by State using Drift Model",
+       y = "Mean Data Value",
+       x = "Year") +
+  theme_minimal() +
+  facet_wrap(~ LocationDesc, scales = "free_y") # Separate plot for each state
+```
+
+
+
+```{r}
+#Forecasting
+# Check the number of observations per LocationDesc
+agg_smoke %>%
+  count(LocationDesc) %>%
+  filter(n < 8) # Identify locations with less than 8 observations
+
+# Fit the model for each state
+fit <- agg_smoke %>%
+  group_by(LocationDesc) %>%
+  filter(n() >= 8) %>%  # Ensure there are at least 2 data points per group
+  model(trend_model = TSLM(Mean_Data_Value ~ trend()))
+
+# Print the model fit
+print(fit)
+
+# Forecast for each state
+forecast_data <- fit %>%
+  forecast(h = "3 years")
+
+# Plot the forecast for each state
+autoplot(forecast_data, agg_smoke) +
+  labs(title = "Forecast of 1-Month Prevalence of Smoking",
+       y = "1-Month Prevalence",
+       x = "Year") +
+  theme_minimal() +
+  facet_wrap(~ LocationDesc, scales = "free_y") # Separate plot for each state
 ```
 
